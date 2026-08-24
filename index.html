@@ -399,16 +399,20 @@ function isInThisWeek(dateObj, range){
   return t >= range.start && t <= range.end;
 }
 
-// Sums Container Count for all valid rows whose Container Require delivery date
-// falls within the current Monday–Sunday week, regardless of any active table filters.
-function computeContainersThisWeek(){
+// Summarises all four top KPIs from the Container Require delivery date column,
+// restricted to the current Monday–Sunday week — independent of any table filters,
+// so Booked/Missing/Product Not Ready always break down the same "this week" total.
+function computeWeekSummary(){
   const range = getThisWeekRange();
-  let total = 0;
+  let total = 0, booked = 0, missing = 0, notReady = 0;
   RAW_ROWS.forEach(r => {
     const d = parseAnyDate(r.deliveryDate);
-    if(isInThisWeek(d, range)) total += r.containerCount;
+    if(!isInThisWeek(d, range)) return;
+    total += r.containerCount;
+    if(r.booked) booked += r.containerCount; else missing += r.containerCount;
+    if(!isProductReady(r.statusOrder)) notReady += r.containerCount;
   });
-  return total;
+  return {total, booked, missing, notReady};
 }
 
 // Formats any date cell (serial number or text) to Indonesian DD/MM/YY.
@@ -496,7 +500,14 @@ async function loadData(){
       }));
 
     populateFilterOptions();
-    document.getElementById('kpiContainersWeek').textContent = computeContainersThisWeek().toLocaleString();
+    const summary = computeWeekSummary();
+    document.getElementById('kpiContainersWeek').textContent = summary.total.toLocaleString();
+    document.getElementById('kpiBooked').textContent = summary.booked.toLocaleString();
+    document.getElementById('kpiMissing').textContent = summary.missing.toLocaleString();
+    document.getElementById('kpiNotReady').textContent = summary.notReady.toLocaleString();
+    document.getElementById('kpiBookedPct').textContent = summary.total ? Math.round(summary.booked/summary.total*100)+"% of this week's containers" : 'BC number assigned';
+    document.getElementById('kpiMissingPct').textContent = summary.total ? Math.round(summary.missing/summary.total*100)+"% of this week's containers" : 'no BC number yet';
+    document.getElementById('kpiNotReadyPct').textContent = summary.total ? Math.round(summary.notReady/summary.total*100)+"% of this week's containers — Status Order ≠ Finish Pack" : 'status order ≠ Finish Pack';
     applyFilters();
     document.getElementById('lastUpdated').textContent =
       'Live · updated ' + new Date().toLocaleString('en-GB', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'});
@@ -573,7 +584,6 @@ function applyFilters(){
   });
 
   rows = sortRows(rows);
-  renderKpis(rows);
   renderTable(rows);
 }
 
@@ -595,21 +605,6 @@ function sortRows(rows){
     if(av>bv) return 1*mult;
     return 0;
   });
-}
-
-function renderKpis(rows){
-  const sumContainers = arr => arr.reduce((s,r)=>s+r.containerCount, 0);
-  const total = sumContainers(rows);
-  const booked = sumContainers(rows.filter(r=>r.booked));
-  const missing = sumContainers(rows.filter(r=>!r.booked));
-  const notReady = sumContainers(rows.filter(r => !isProductReady(r.statusOrder)));
-
-  document.getElementById('kpiBooked').textContent = booked.toLocaleString();
-  document.getElementById('kpiMissing').textContent = missing.toLocaleString();
-  document.getElementById('kpiNotReady').textContent = notReady.toLocaleString();
-  document.getElementById('kpiBookedPct').textContent = total ? Math.round(booked/total*100)+'% of shown containers' : 'BC number assigned';
-  document.getElementById('kpiMissingPct').textContent = total ? Math.round(missing/total*100)+'% of shown containers' : 'no BC number yet';
-  document.getElementById('kpiNotReadyPct').textContent = total ? Math.round(notReady/total*100)+'% of shown containers — Status Order ≠ Finish Pack' : 'status order ≠ Finish Pack';
 }
 
 function renderHead(){
