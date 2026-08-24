@@ -76,7 +76,7 @@
   .refresh-btn:disabled{opacity:.6; cursor:default;}
 
   /* ===== Layout ===== */
-  main{padding:22px 28px 60px; max-width:1500px; margin:0 auto;}
+  main{padding:22px 28px 60px; width:100%; margin:0 auto;}
 
   /* ===== KPI cards ===== */
   .kpi-row{
@@ -148,6 +148,7 @@
   tbody tr:hover{background:#F5FAFA;}
   tbody tr.date-sep td{border-top:1.5px solid var(--navy-900);}
   td.product-cell{white-space:normal; max-width:260px; min-width:200px; line-height:1.35; color:var(--ink-600); font-size:12.2px;}
+  td.customer-cell{white-space:normal; max-width:160px; min-width:120px; line-height:1.35;}
   td.center{text-align:center;}
   .badge{
     display:inline-block; padding:3px 9px; border-radius:100px; font-size:11px; font-weight:600;
@@ -597,17 +598,18 @@ function sortRows(rows){
 }
 
 function renderKpis(rows){
-  const total = rows.length;
-  const booked = rows.filter(r=>r.booked).length;
-  const missing = total - booked;
-  const notReady = rows.filter(r => !isProductReady(r.statusOrder)).length;
+  const sumContainers = arr => arr.reduce((s,r)=>s+r.containerCount, 0);
+  const total = sumContainers(rows);
+  const booked = sumContainers(rows.filter(r=>r.booked));
+  const missing = sumContainers(rows.filter(r=>!r.booked));
+  const notReady = sumContainers(rows.filter(r => !isProductReady(r.statusOrder)));
 
   document.getElementById('kpiBooked').textContent = booked.toLocaleString();
   document.getElementById('kpiMissing').textContent = missing.toLocaleString();
   document.getElementById('kpiNotReady').textContent = notReady.toLocaleString();
-  document.getElementById('kpiBookedPct').textContent = total ? Math.round(booked/total*100)+'% of shown orders' : 'BC number assigned';
-  document.getElementById('kpiMissingPct').textContent = total ? Math.round(missing/total*100)+'% of shown orders' : 'no BC number yet';
-  document.getElementById('kpiNotReadyPct').textContent = total ? Math.round(notReady/total*100)+'% of shown orders — Status Order ≠ Finish Pack' : 'status order ≠ Finish Pack';
+  document.getElementById('kpiBookedPct').textContent = total ? Math.round(booked/total*100)+'% of shown containers' : 'BC number assigned';
+  document.getElementById('kpiMissingPct').textContent = total ? Math.round(missing/total*100)+'% of shown containers' : 'no BC number yet';
+  document.getElementById('kpiNotReadyPct').textContent = total ? Math.round(notReady/total*100)+'% of shown containers — Status Order ≠ Finish Pack' : 'status order ≠ Finish Pack';
 }
 
 function renderHead(){
@@ -640,7 +642,7 @@ function renderTable(rows){
     return `
     <tr class="${isNewGroup ? 'date-sep' : ''}">
       <td class="mono">${escapeHtml(r.po)}</td>
-      <td>${escapeHtml(r.customer)}</td>
+      <td class="customer-cell">${escapeHtml(r.customer)}</td>
       <td class="mono">${escapeHtml(r.item)}</td>
       <td class="product-cell">${escapeHtml(r.product)}</td>
       <td class="center mono">${r.pallets % 1 === 0 ? r.pallets : r.pallets.toFixed(1)}</td>
