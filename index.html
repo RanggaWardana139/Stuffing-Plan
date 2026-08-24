@@ -80,7 +80,7 @@
 
   /* ===== KPI cards ===== */
   .kpi-row{
-    display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:20px;
+    display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px;
   }
   .kpi{
     background:var(--card); border:1px solid var(--line); border-radius:12px;
@@ -90,7 +90,6 @@
     content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
   }
   .kpi.total::before{background:var(--navy-700);}
-  .kpi.pallets::before{background:var(--teal-500);}
   .kpi.booked::before{background:var(--green-600);}
   .kpi.missing::before{background:var(--red-500);}
   .kpi.notready::before{background:var(--amber-500);}
@@ -121,6 +120,8 @@
   .seg button.active{background:var(--navy-800); color:#fff;}
   .seg button.active.b-booked{background:var(--green-600);}
   .seg button.active.b-missing{background:var(--red-500);}
+  .seg button.active.b-prodready{background:var(--green-600);}
+  .seg button.active.b-prodnotready{background:var(--amber-500);}
   .spacer{flex:1;}
   .reset-btn{
     background:none; border:1px solid var(--line); border-radius:8px; padding:8px 14px;
@@ -145,6 +146,7 @@
   thead th .arrow{opacity:.55; font-size:10px; margin-left:3px;}
   tbody td{padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap; color:var(--ink-900);}
   tbody tr:hover{background:#F5FAFA;}
+  tbody tr.date-sep td{border-top:1.5px solid var(--navy-900);}
   td.product-cell{white-space:normal; max-width:260px; min-width:200px; line-height:1.35; color:var(--ink-600); font-size:12.2px;}
   td.center{text-align:center;}
   .badge{
@@ -198,10 +200,9 @@
 
   <div class="kpi-row" id="kpiRow">
     <div class="kpi total"><div class="lbl">Orders shown</div><div class="val" id="kpiTotal">—</div><div class="foot">line items in current filter</div></div>
-    <div class="kpi pallets"><div class="lbl">Total pallets</div><div class="val" id="kpiPallets">—</div><div class="foot">summed across filtered orders</div></div>
     <div class="kpi booked"><div class="lbl">Booked</div><div class="val" id="kpiBooked">—</div><div class="foot" id="kpiBookedPct">BC number assigned</div></div>
     <div class="kpi missing"><div class="lbl">Missing booking</div><div class="val" id="kpiMissing">—</div><div class="foot" id="kpiMissingPct">no BC number yet</div></div>
-    <div class="kpi notready"><div class="lbl">Product not ready</div><div class="val" id="kpiNotReady">—</div><div class="foot">briquette or packing pending</div></div>
+    <div class="kpi notready"><div class="lbl">Product not ready</div><div class="val" id="kpiNotReady">—</div><div class="foot" id="kpiNotReadyPct">status order ≠ Finish Pack</div></div>
   </div>
 
   <div class="filter-bar">
@@ -225,6 +226,14 @@
         <button class="b-missing" data-val="missing" onclick="setBooking('missing')">Missing booking</button>
       </div>
     </div>
+    <div class="field">
+      <label>Production status</label>
+      <div class="seg" id="prodSeg">
+        <button class="active" data-val="all" onclick="setProdStatus('all')">All</button>
+        <button class="b-prodready" data-val="ready" onclick="setProdStatus('ready')">Product Ready</button>
+        <button class="b-prodnotready" data-val="notready" onclick="setProdStatus('notready')">Product Not Ready</button>
+      </div>
+    </div>
     <div class="spacer"></div>
     <div class="week-note">Week codes match the sheet's internal "Expected Week" numbering — pick the code you want to review.</div>
     <button class="reset-btn" onclick="resetFilters()">Reset filters</button>
@@ -241,7 +250,7 @@
     </table>
   </div>
 
-  <footer>Source: published Google Sheet (CSV) · Auto-refreshes when you click "Refresh data" · Built for Longhi Group PPIC</footer>
+  <footer>Source: published Google Sheet (CSV) · Auto-refreshes when you click "Refresh data" · Built by Rangga Wardana for Longhi Group</footer>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -280,6 +289,26 @@ const COLUMNS = [
 let RAW_ROWS = [];
 let sortState = {key:'expectedWeek', dir:'asc'};
 let bookingFilter = 'all';
+let prodFilter = 'all';
+
+const MONTH_MAP = {
+  jan:'01', january:'01', januari:'01',
+  feb:'02', february:'02', februari:'02',
+  mar:'03', march:'03', maret:'03',
+  apr:'04', april:'04',
+  may:'05', mei:'05',
+  jun:'06', june:'06', juni:'06',
+  jul:'07', july:'07', juli:'07',
+  aug:'08', august:'08', agu:'08', ags:'08', agustus:'08',
+  sep:'09', sept:'09', september:'09',
+  oct:'10', october:'10', okt:'10', oktober:'10',
+  nov:'11', november:'11',
+  dec:'12', december:'12', des:'12', desember:'12'
+};
+
+function isProductReady(statusOrder){
+  return cleanCell(statusOrder).toLowerCase() === 'finish pack';
+}
 
 function cleanCell(v){
   if(v===undefined || v===null) return '';
@@ -297,6 +326,36 @@ function parsePallets(v){
   const s = cleanCell(v).replace(',', '.');
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
+}
+
+// Parses dates like "31-Agu" (no year) or "27-Aug-2026" into {day, month, year|null}
+function parseDateParts(raw){
+  const s = cleanCell(raw);
+  if(!s || s.startsWith('#') || s.startsWith('-')) return null;
+  const parts = s.split('-').map(p => p.trim());
+  if(parts.length < 2) return null;
+  const day = parts[0].padStart(2, '0');
+  const monthKey = parts[1].toLowerCase();
+  const month = MONTH_MAP[monthKey];
+  if(!month || !/^\d{1,2}$/.test(day)) return null;
+  let year = null;
+  if(parts[2] && /^\d{4}$/.test(parts[2])) year = parts[2].slice(2);
+  else if(parts[2] && /^\d{2}$/.test(parts[2])) year = parts[2];
+  return {day, month, year};
+}
+
+// Formats a date string to Indonesian DD/MM/YY, borrowing the year from a fallback
+// date string (e.g. the row's Delivery Date) when the source has no year of its own.
+function formatIndoDate(raw, fallbackRaw){
+  const parts = parseDateParts(raw);
+  if(!parts) return cleanCell(raw) || '—';
+  let year = parts.year;
+  if(!year && fallbackRaw){
+    const fb = parseDateParts(fallbackRaw);
+    if(fb && fb.year) year = fb.year;
+  }
+  if(!year) year = String(new Date().getFullYear()).slice(2);
+  return `${parts.day}/${parts.month}/${year}`;
 }
 
 function statusBadgeClass(status){
@@ -399,11 +458,18 @@ function setBooking(val){
   applyFilters();
 }
 
+function setProdStatus(val){
+  prodFilter = val;
+  document.querySelectorAll('#prodSeg button').forEach(b => b.classList.toggle('active', b.dataset.val===val));
+  applyFilters();
+}
+
 function resetFilters(){
   document.getElementById('searchInput').value = '';
   document.getElementById('weekSelect').value = 'all';
   document.getElementById('destSelect').value = 'all';
   setBooking('all');
+  setProdStatus('all');
 }
 
 function applyFilters(){
@@ -416,6 +482,8 @@ function applyFilters(){
     if(dest !== 'all' && r.destination !== dest) return false;
     if(bookingFilter === 'booked' && !r.booked) return false;
     if(bookingFilter === 'missing' && r.booked) return false;
+    if(prodFilter === 'ready' && !isProductReady(r.statusOrder)) return false;
+    if(prodFilter === 'notready' && isProductReady(r.statusOrder)) return false;
     if(q){
       const hay = (r.po+' '+r.customer+' '+r.product+' '+r.salesOrder+' '+r.pro+' '+r.item).toLowerCase();
       if(!hay.includes(q)) return false;
@@ -450,18 +518,17 @@ function sortRows(rows){
 
 function renderKpis(rows){
   const total = rows.length;
-  const pallets = rows.reduce((s,r)=>s+r.pallets,0);
   const booked = rows.filter(r=>r.booked).length;
   const missing = total - booked;
-  const notReady = rows.filter(r => r.briquetteStatus.toLowerCase().includes('not ready') || r.statusPackaging.toLowerCase().includes('not ready')).length;
+  const notReady = rows.filter(r => !isProductReady(r.statusOrder)).length;
 
   document.getElementById('kpiTotal').textContent = total.toLocaleString();
-  document.getElementById('kpiPallets').textContent = pallets % 1 === 0 ? pallets.toLocaleString() : pallets.toFixed(1);
   document.getElementById('kpiBooked').textContent = booked.toLocaleString();
   document.getElementById('kpiMissing').textContent = missing.toLocaleString();
   document.getElementById('kpiNotReady').textContent = notReady.toLocaleString();
   document.getElementById('kpiBookedPct').textContent = total ? Math.round(booked/total*100)+'% of shown orders' : 'BC number assigned';
   document.getElementById('kpiMissingPct').textContent = total ? Math.round(missing/total*100)+'% of shown orders' : 'no BC number yet';
+  document.getElementById('kpiNotReadyPct').textContent = total ? Math.round(notReady/total*100)+'% of shown orders — Status Order ≠ Finish Pack' : 'status order ≠ Finish Pack';
 }
 
 function renderHead(){
@@ -485,8 +552,14 @@ function renderTable(rows){
     tbody.innerHTML = `<tr><td class="empty-state" colspan="${COLUMNS.length}">No orders match the current filters.</td></tr>`;
     return;
   }
-  tbody.innerHTML = rows.map(r => `
-    <tr>
+  let prevDeliveryDate = null;
+  tbody.innerHTML = rows.map((r, idx) => {
+    const etdFormatted = formatIndoDate(r.etdPort, r.deliveryDate);
+    const deliveryFormatted = formatIndoDate(r.deliveryDate, r.deliveryDate);
+    const isNewGroup = idx > 0 && r.deliveryDate !== prevDeliveryDate;
+    prevDeliveryDate = r.deliveryDate;
+    return `
+    <tr class="${isNewGroup ? 'date-sep' : ''}">
       <td class="mono">${escapeHtml(r.po)}</td>
       <td>${escapeHtml(r.customer)}</td>
       <td class="mono">${escapeHtml(r.item)}</td>
@@ -500,12 +573,13 @@ function renderTable(rows){
       <td>${escapeHtml(r.destination)}</td>
       <td>${escapeHtml(r.whShipment)}</td>
       <td>${r.booked ? `<span class="pill-booked">Booked · ${escapeHtml(r.bcNumber)}</span>` : `<span class="pill-missing">Missing booking</span>`}</td>
-      <td>${escapeHtml(r.etdPort)}</td>
-      <td>${escapeHtml(r.deliveryDate)}</td>
+      <td class="mono">${etdFormatted}</td>
+      <td class="mono">${deliveryFormatted}</td>
       <td>${escapeHtml(r.day)}</td>
       <td>${escapeHtml(r.palletType)}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
 
 renderHead();
