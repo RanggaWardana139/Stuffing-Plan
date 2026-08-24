@@ -275,7 +275,7 @@ const COLUMNS = [
   {key:'salesOrder', label:'Sales Order'},
   {key:'pro', label:'PRO No.'},
   {key:'statusOrder', label:'Status Order'},
-  {key:'palletStatus', label:'Pallet Status'},
+  {key:'statusProduct', label:'Status Product'},
   {key:'expectedWeek', label:'Exp. Week', numeric:true},
   {key:'destination', label:'Destination'},
   {key:'whShipment', label:'WH Shipment'},
@@ -601,7 +601,7 @@ function renderTable(rows){
       <td class="mono">${escapeHtml(r.salesOrder)}</td>
       <td class="mono">${escapeHtml(r.pro)}</td>
       <td>${statusBadge(r.statusOrder)}</td>
-      <td>${statusBadge(r.palletStatus)}</td>
+      <td>${statusBadge(r.statusProduct)}</td>
       <td class="center mono">${escapeHtml(r.expectedWeek)}</td>
       <td>${escapeHtml(r.destination)}</td>
       <td>${escapeHtml(r.whShipment)}</td>
