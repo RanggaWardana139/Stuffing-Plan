@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Container Loading Plan — Live Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-900:#0C1F33;
+    --navy-800:#132B45;
+    --navy-700:#1B3A5C;
+    --teal-500:#1B8F8F;
+    --teal-400:#2FB0AD;
+    --amber-500:#E0A62E;
+    --red-500:#D64545;
+    --green-600:#2E9E5B;
+    --bg:#F3F5F7;
+    --card:#FFFFFF;
+    --line:#E3E7EC;
+    --ink-900:#101828;
+    --ink-600:#4A5568;
+    --ink-400:#8A93A3;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    font-family:'Inter',system-ui,sans-serif;
+    color:var(--ink-900);
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  /* ===== Header ===== */
+  header.topbar{
+    background:linear-gradient(135deg,var(--navy-900) 0%,var(--navy-700) 100%);
+    color:#fff;
+    padding:22px 28px 26px;
+    position:relative;
+    overflow:hidden;
+  }
+  header.topbar::after{
+    content:"";
+    position:absolute; inset:0;
+    background-image:repeating-linear-gradient(90deg, rgba(255,255,255,0.045) 0 2px, transparent 2px 34px);
+    pointer-events:none;
+  }
+  .topbar-inner{position:relative; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:14px;}
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--teal-400); margin:0 0 6px;
+  }
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:26px; margin:0; font-weight:700; letter-spacing:-.01em;
+  }
+  .sub{color:#B9C6D6; font-size:13px; margin-top:6px;}
+  .status-cluster{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  .live-pill{
+    display:inline-flex; align-items:center; gap:7px;
+    background:rgba(47,176,173,0.15); border:1px solid rgba(47,176,173,0.4);
+    color:var(--teal-400); font-size:12px; padding:6px 12px; border-radius:100px;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--teal-400); animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .refresh-btn{
+    background:var(--teal-500); color:#fff; border:none; padding:9px 16px; border-radius:8px;
+    font-size:13px; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif;
+    transition:background .15s;
+  }
+  .refresh-btn:hover{background:var(--teal-400);}
+  .refresh-btn:disabled{opacity:.6; cursor:default;}
+
+  /* ===== Layout ===== */
+  main{padding:22px 28px 60px; max-width:1500px; margin:0 auto;}
+
+  /* ===== KPI cards ===== */
+  .kpi-row{
+    display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:20px;
+  }
+  .kpi{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:16px 18px; position:relative; overflow:hidden;
+  }
+  .kpi::before{
+    content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+  }
+  .kpi.total::before{background:var(--navy-700);}
+  .kpi.pallets::before{background:var(--teal-500);}
+  .kpi.booked::before{background:var(--green-600);}
+  .kpi.missing::before{background:var(--red-500);}
+  .kpi.notready::before{background:var(--amber-500);}
+  .kpi .lbl{font-size:11.5px; color:var(--ink-400); text-transform:uppercase; letter-spacing:.07em; font-weight:600;}
+  .kpi .val{font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:700; margin-top:4px; color:var(--ink-900);}
+  .kpi .foot{font-size:11.5px; color:var(--ink-600); margin-top:3px;}
+
+  /* ===== Filter bar ===== */
+  .filter-bar{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:14px 16px; margin-bottom:18px;
+    display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;
+  }
+  .field{display:flex; flex-direction:column; gap:5px;}
+  .field label{font-size:11px; font-weight:600; color:var(--ink-600); text-transform:uppercase; letter-spacing:.05em;}
+  .field select, .field input[type=text]{
+    border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13.5px;
+    font-family:'Inter',sans-serif; background:#fff; color:var(--ink-900); min-width:150px;
+  }
+  .field select:focus, .field input:focus{outline:2px solid var(--teal-400); outline-offset:1px;}
+  .search-field input{min-width:230px;}
+  .seg{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .seg button{
+    border:none; background:#fff; padding:8px 13px; font-size:13px; font-weight:600;
+    cursor:pointer; color:var(--ink-600); border-right:1px solid var(--line); font-family:'Inter',sans-serif;
+  }
+  .seg button:last-child{border-right:none;}
+  .seg button.active{background:var(--navy-800); color:#fff;}
+  .seg button.active.b-booked{background:var(--green-600);}
+  .seg button.active.b-missing{background:var(--red-500);}
+  .spacer{flex:1;}
+  .reset-btn{
+    background:none; border:1px solid var(--line); border-radius:8px; padding:8px 14px;
+    font-size:13px; color:var(--ink-600); cursor:pointer; font-family:'Inter',sans-serif; font-weight:600;
+  }
+  .reset-btn:hover{border-color:var(--ink-400);}
+  .week-note{font-size:11px; color:var(--ink-400); max-width:180px; line-height:1.4;}
+
+  /* ===== Table ===== */
+  .table-wrap{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    overflow:auto; max-height:70vh;
+  }
+  table{border-collapse:collapse; width:100%; font-size:12.8px; min-width:1400px;}
+  thead th{
+    position:sticky; top:0; background:var(--navy-900); color:#EDF1F5;
+    text-align:left; padding:10px 12px; font-weight:600; font-size:11.3px;
+    text-transform:uppercase; letter-spacing:.04em; cursor:pointer; white-space:nowrap;
+    user-select:none; z-index:2;
+  }
+  thead th:hover{background:var(--navy-700);}
+  thead th .arrow{opacity:.55; font-size:10px; margin-left:3px;}
+  tbody td{padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap; color:var(--ink-900);}
+  tbody tr:hover{background:#F5FAFA;}
+  td.product-cell{white-space:normal; max-width:260px; min-width:200px; line-height:1.35; color:var(--ink-600); font-size:12.2px;}
+  td.center{text-align:center;}
+  .badge{
+    display:inline-block; padding:3px 9px; border-radius:100px; font-size:11px; font-weight:600;
+    white-space:nowrap;
+  }
+  .b-ready{background:#E4F5EB; color:var(--green-600);}
+  .b-notready{background:#FCE9E9; color:var(--red-500);}
+  .b-onhand{background:#E7F0FB; color:#2A63B0;}
+  .b-finishpack{background:#F1E9FB; color:#7A4FC4;}
+  .b-packing{background:#E4F5F3; color:var(--teal-500);}
+  .b-other{background:#EEF0F3; color:var(--ink-600);}
+  .pill-booked{background:#E4F5EB; color:var(--green-600); padding:3px 10px; border-radius:100px; font-size:11px; font-weight:700;}
+  .pill-missing{background:#FCE9E9; color:var(--red-500); padding:3px 10px; border-radius:100px; font-size:11px; font-weight:700;}
+  .empty-state{padding:50px 20px; text-align:center; color:var(--ink-400); font-size:14px;}
+  .err-state{padding:16px 18px; background:#FCE9E9; color:#8A2A2A; border-radius:10px; font-size:13px; margin-bottom:18px; display:none;}
+
+  footer{
+    text-align:center; font-size:11.5px; color:var(--ink-400); padding:26px 10px 10px;
+  }
+
+  @media (max-width:1100px){
+    .kpi-row{grid-template-columns:repeat(2,1fr);}
+  }
+  @media (max-width:640px){
+    main{padding:16px;}
+    header.topbar{padding:18px 16px 22px;}
+    h1{font-size:21px;}
+    .kpi-row{grid-template-columns:1fr 1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div>
+      <p class="eyebrow">PPIC · Supply Chain — Longhi Group</p>
+      <h1>Container Loading Plan</h1>
+      <p class="sub">Live shipment &amp; booking status, sourced directly from the Loading Plan sheet.</p>
+    </div>
+    <div class="status-cluster">
+      <span class="live-pill"><span class="dot"></span><span id="lastUpdated">Loading…</span></span>
+      <button class="refresh-btn" id="refreshBtn" onclick="loadData()">Refresh data</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="err-state" id="errState"></div>
+
+  <div class="kpi-row" id="kpiRow">
+    <div class="kpi total"><div class="lbl">Orders shown</div><div class="val" id="kpiTotal">—</div><div class="foot">line items in current filter</div></div>
+    <div class="kpi pallets"><div class="lbl">Total pallets</div><div class="val" id="kpiPallets">—</div><div class="foot">summed across filtered orders</div></div>
+    <div class="kpi booked"><div class="lbl">Booked</div><div class="val" id="kpiBooked">—</div><div class="foot" id="kpiBookedPct">BC number assigned</div></div>
+    <div class="kpi missing"><div class="lbl">Missing booking</div><div class="val" id="kpiMissing">—</div><div class="foot" id="kpiMissingPct">no BC number yet</div></div>
+    <div class="kpi notready"><div class="lbl">Product not ready</div><div class="val" id="kpiNotReady">—</div><div class="foot">briquette or packing pending</div></div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="field search-field">
+      <label for="searchInput">Search</label>
+      <input type="text" id="searchInput" placeholder="PO, customer, product, SO, PRO…" oninput="applyFilters()">
+    </div>
+    <div class="field">
+      <label for="weekSelect">Expected week</label>
+      <select id="weekSelect" onchange="applyFilters()"></select>
+    </div>
+    <div class="field">
+      <label for="destSelect">Destination</label>
+      <select id="destSelect" onchange="applyFilters()"></select>
+    </div>
+    <div class="field">
+      <label>Booking status</label>
+      <div class="seg" id="bookingSeg">
+        <button class="active" data-val="all" onclick="setBooking('all')">All</button>
+        <button class="b-booked" data-val="booked" onclick="setBooking('booked')">Booked</button>
+        <button class="b-missing" data-val="missing" onclick="setBooking('missing')">Missing booking</button>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="week-note">Week codes match the sheet's internal "Expected Week" numbering — pick the code you want to review.</div>
+    <button class="reset-btn" onclick="resetFilters()">Reset filters</button>
+  </div>
+
+  <div class="table-wrap">
+    <table id="dataTable">
+      <thead>
+        <tr id="headRow"></tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr><td class="empty-state" colspan="18">Loading live data…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>Source: published Google Sheet (CSV) · Auto-refreshes when you click "Refresh data" · Built for Longhi Group PPIC</footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script>
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSFb8mibeLxtTRWAllYDxiUr6RT0ezSeMRxvEObufk-EIKTQjibnLq9R3d4hbQcDbIf9fvkbmm-TDK/pub?gid=616475038&single=true&output=csv";
+
+// Column index map (0-based) based on the published sheet header row
+const COL = {
+  po:0, customer:1, containerCount:2, item:3, product:4, pallets:5,
+  salesOrder:6, pro:7, statusOrder:8, statusProduct:9, briquetteStatus:10,
+  statusPackaging:11, palletStatus:12, origReq:13, expectedWeek:14, control:15,
+  destination:16, whShipment:17, bcNumber:18, etdPort:35, deliveryDate:36,
+  day:37, palletType:39, ispm:40, fumigation:41
+};
+
+const COLUMNS = [
+  {key:'po', label:'PO / Order'},
+  {key:'customer', label:'Customer'},
+  {key:'item', label:'Item No.'},
+  {key:'product', label:'Product'},
+  {key:'pallets', label:'Pallets', numeric:true},
+  {key:'salesOrder', label:'Sales Order'},
+  {key:'pro', label:'PRO No.'},
+  {key:'statusOrder', label:'Status Order'},
+  {key:'palletStatus', label:'Pallet Status'},
+  {key:'expectedWeek', label:'Exp. Week', numeric:true},
+  {key:'destination', label:'Destination'},
+  {key:'whShipment', label:'WH Shipment'},
+  {key:'booking', label:'Booking'},
+  {key:'etdPort', label:'ETD Port'},
+  {key:'deliveryDate', label:'Delivery Date'},
+  {key:'day', label:'Day'},
+  {key:'palletType', label:'Pallet Type'}
+];
+
+let RAW_ROWS = [];
+let sortState = {key:'expectedWeek', dir:'asc'};
+let bookingFilter = 'all';
+
+function cleanCell(v){
+  if(v===undefined || v===null) return '';
+  return String(v).trim();
+}
+
+function isBooked(bc){
+  const v = cleanCell(bc);
+  if(v==='' || v==='0') return false;
+  if(/^#N\/A$/i.test(v)) return false;
+  return true;
+}
+
+function parsePallets(v){
+  const s = cleanCell(v).replace(',', '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+function statusBadgeClass(status){
+  const s = (status||'').toLowerCase();
+  if(s==='ready') return 'b-ready';
+  if(s.includes('not ready')) return 'b-notready';
+  if(s.includes('on hand')) return 'b-onhand';
+  if(s.includes('finish pack')) return 'b-finishpack';
+  if(s.includes('packing')) return 'b-packing';
+  return 'b-other';
+}
+
+function statusBadge(status){
+  const label = cleanCell(status) || '—';
+  return `<span class="badge ${statusBadgeClass(status)}">${escapeHtml(label)}</span>`;
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+async function loadData(){
+  const btn = document.getElementById('refreshBtn');
+  const errBox = document.getElementById('errState');
+  btn.disabled = true; btn.textContent = 'Refreshing…';
+  errBox.style.display = 'none';
+  try{
+    const res = await fetch(CSV_URL + (CSV_URL.includes('?')?'&':'?') + 'cachebust=' + Date.now());
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const parsed = Papa.parse(text, {skipEmptyLines:false});
+    const rows = parsed.data;
+
+    RAW_ROWS = rows
+      .filter(r => /^CG-SO/i.test(cleanCell(r[COL.salesOrder])))
+      .map(r => ({
+        po: cleanCell(r[COL.po]),
+        customer: cleanCell(r[COL.customer]),
+        item: cleanCell(r[COL.item]),
+        product: cleanCell(r[COL.product]),
+        pallets: parsePallets(r[COL.pallets]),
+        salesOrder: cleanCell(r[COL.salesOrder]),
+        pro: cleanCell(r[COL.pro]),
+        statusOrder: cleanCell(r[COL.statusOrder]),
+        statusProduct: cleanCell(r[COL.statusProduct]),
+        briquetteStatus: cleanCell(r[COL.briquetteStatus]),
+        statusPackaging: cleanCell(r[COL.statusPackaging]),
+        palletStatus: cleanCell(r[COL.palletStatus]),
+        expectedWeek: cleanCell(r[COL.expectedWeek]),
+        destination: cleanCell(r[COL.destination]) || '—',
+        whShipment: cleanCell(r[COL.whShipment]),
+        bcNumber: cleanCell(r[COL.bcNumber]),
+        booked: isBooked(r[COL.bcNumber]),
+        etdPort: cleanCell(r[COL.etdPort]),
+        deliveryDate: cleanCell(r[COL.deliveryDate]),
+        day: (() => { const d = cleanCell(r[COL.day]); return /^#/.test(d) ? '' : d; })(),
+        palletType: cleanCell(r[COL.palletType])
+      }));
+
+    populateFilterOptions();
+    applyFilters();
+    document.getElementById('lastUpdated').textContent =
+      'Live · updated ' + new Date().toLocaleString('en-GB', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'});
+  }catch(err){
+    errBox.style.display = 'block';
+    errBox.textContent = 'Could not load live data (' + err.message + '). Check your connection and click "Refresh data" again.';
+    document.getElementById('lastUpdated').textContent = 'Offline';
+  }finally{
+    btn.disabled = false; btn.textContent = 'Refresh data';
+  }
+}
+
+function populateFilterOptions(){
+  const weekSel = document.getElementById('weekSelect');
+  const destSel = document.getElementById('destSelect');
+  const prevWeek = weekSel.value;
+  const prevDest = destSel.value;
+
+  const weekCounts = {};
+  RAW_ROWS.forEach(r => { if(r.expectedWeek) weekCounts[r.expectedWeek] = (weekCounts[r.expectedWeek]||0)+1; });
+  const weeks = Object.keys(weekCounts).sort((a,b)=> Number(a)-Number(b));
+  let modeWeek = weeks[0];
+  let modeCount = -1;
+  weeks.forEach(w => { if(weekCounts[w] > modeCount){ modeCount = weekCounts[w]; modeWeek = w; } });
+
+  weekSel.innerHTML = '<option value="all">All weeks</option>' +
+    weeks.map(w => `<option value="${w}">Week ${w} (${weekCounts[w]})</option>`).join('');
+  weekSel.value = weeks.includes(prevWeek) ? prevWeek : (prevWeek === 'all' ? 'all' : modeWeek);
+  if(!weekSel.value) weekSel.value = 'all';
+
+  const dests = [...new Set(RAW_ROWS.map(r => r.destination))].sort();
+  destSel.innerHTML = '<option value="all">All destinations</option>' +
+    dests.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+  destSel.value = dests.includes(prevDest) ? prevDest : 'all';
+}
+
+function setBooking(val){
+  bookingFilter = val;
+  document.querySelectorAll('#bookingSeg button').forEach(b => b.classList.toggle('active', b.dataset.val===val));
+  applyFilters();
+}
+
+function resetFilters(){
+  document.getElementById('searchInput').value = '';
+  document.getElementById('weekSelect').value = 'all';
+  document.getElementById('destSelect').value = 'all';
+  setBooking('all');
+}
+
+function applyFilters(){
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const week = document.getElementById('weekSelect').value;
+  const dest = document.getElementById('destSelect').value;
+
+  let rows = RAW_ROWS.filter(r => {
+    if(week !== 'all' && r.expectedWeek !== week) return false;
+    if(dest !== 'all' && r.destination !== dest) return false;
+    if(bookingFilter === 'booked' && !r.booked) return false;
+    if(bookingFilter === 'missing' && r.booked) return false;
+    if(q){
+      const hay = (r.po+' '+r.customer+' '+r.product+' '+r.salesOrder+' '+r.pro+' '+r.item).toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  rows = sortRows(rows);
+  renderKpis(rows);
+  renderTable(rows);
+}
+
+function sortRows(rows){
+  const {key, dir} = sortState;
+  const col = COLUMNS.find(c => c.key === key);
+  const mult = dir === 'asc' ? 1 : -1;
+  return rows.slice().sort((a,b) => {
+    let av, bv;
+    if(key === 'booking'){ av = a.booked?1:0; bv = b.booked?1:0; }
+    else { av = a[key]; bv = b[key]; }
+    if(col && col.numeric){
+      av = parseFloat(av) || 0; bv = parseFloat(bv) || 0;
+      return (av-bv)*mult;
+    }
+    av = (av||'').toString().toLowerCase();
+    bv = (bv||'').toString().toLowerCase();
+    if(av<bv) return -1*mult;
+    if(av>bv) return 1*mult;
+    return 0;
+  });
+}
+
+function renderKpis(rows){
+  const total = rows.length;
+  const pallets = rows.reduce((s,r)=>s+r.pallets,0);
+  const booked = rows.filter(r=>r.booked).length;
+  const missing = total - booked;
+  const notReady = rows.filter(r => r.briquetteStatus.toLowerCase().includes('not ready') || r.statusPackaging.toLowerCase().includes('not ready')).length;
+
+  document.getElementById('kpiTotal').textContent = total.toLocaleString();
+  document.getElementById('kpiPallets').textContent = pallets % 1 === 0 ? pallets.toLocaleString() : pallets.toFixed(1);
+  document.getElementById('kpiBooked').textContent = booked.toLocaleString();
+  document.getElementById('kpiMissing').textContent = missing.toLocaleString();
+  document.getElementById('kpiNotReady').textContent = notReady.toLocaleString();
+  document.getElementById('kpiBookedPct').textContent = total ? Math.round(booked/total*100)+'% of shown orders' : 'BC number assigned';
+  document.getElementById('kpiMissingPct').textContent = total ? Math.round(missing/total*100)+'% of shown orders' : 'no BC number yet';
+}
+
+function renderHead(){
+  const headRow = document.getElementById('headRow');
+  headRow.innerHTML = COLUMNS.map(c => {
+    const arrow = sortState.key === c.key ? (sortState.dir==='asc' ? '▲' : '▼') : '';
+    return `<th onclick="toggleSort('${c.key}')">${c.label}<span class="arrow">${arrow}</span></th>`;
+  }).join('');
+}
+
+function toggleSort(key){
+  if(sortState.key === key){ sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc'; }
+  else { sortState = {key, dir:'asc'}; }
+  renderHead();
+  applyFilters();
+}
+
+function renderTable(rows){
+  const tbody = document.getElementById('tableBody');
+  if(rows.length === 0){
+    tbody.innerHTML = `<tr><td class="empty-state" colspan="${COLUMNS.length}">No orders match the current filters.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td class="mono">${escapeHtml(r.po)}</td>
+      <td>${escapeHtml(r.customer)}</td>
+      <td class="mono">${escapeHtml(r.item)}</td>
+      <td class="product-cell">${escapeHtml(r.product)}</td>
+      <td class="center mono">${r.pallets % 1 === 0 ? r.pallets : r.pallets.toFixed(1)}</td>
+      <td class="mono">${escapeHtml(r.salesOrder)}</td>
+      <td class="mono">${escapeHtml(r.pro)}</td>
+      <td>${statusBadge(r.statusOrder)}</td>
+      <td>${statusBadge(r.palletStatus)}</td>
+      <td class="center mono">${escapeHtml(r.expectedWeek)}</td>
+      <td>${escapeHtml(r.destination)}</td>
+      <td>${escapeHtml(r.whShipment)}</td>
+      <td>${r.booked ? `<span class="pill-booked">Booked · ${escapeHtml(r.bcNumber)}</span>` : `<span class="pill-missing">Missing booking</span>`}</td>
+      <td>${escapeHtml(r.etdPort)}</td>
+      <td>${escapeHtml(r.deliveryDate)}</td>
+      <td>${escapeHtml(r.day)}</td>
+      <td>${escapeHtml(r.palletType)}</td>
+    </tr>
+  `).join('');
+}
+
+renderHead();
+loadData();
+</script>
+</body>
+</html>
