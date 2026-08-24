@@ -199,7 +199,7 @@
   <div class="err-state" id="errState"></div>
 
   <div class="kpi-row" id="kpiRow">
-    <div class="kpi total"><div class="lbl">Orders shown</div><div class="val" id="kpiTotal">—</div><div class="foot">line items in current filter</div></div>
+    <div class="kpi total"><div class="lbl">Containers This Week</div><div class="val" id="kpiContainersWeek">—</div><div class="foot">Container Count summed by Container Require delivery date, Mon–Sun</div></div>
     <div class="kpi booked"><div class="lbl">Booked</div><div class="val" id="kpiBooked">—</div><div class="foot" id="kpiBookedPct">BC number assigned</div></div>
     <div class="kpi missing"><div class="lbl">Missing booking</div><div class="val" id="kpiMissing">—</div><div class="foot" id="kpiMissingPct">no BC number yet</div></div>
     <div class="kpi notready"><div class="lbl">Product not ready</div><div class="val" id="kpiNotReady">—</div><div class="foot" id="kpiNotReadyPct">status order ≠ Finish Pack</div></div>
@@ -365,6 +365,51 @@ function yearFromAnySource(raw){
   return null;
 }
 
+// Resolves any date cell (serial number or text) to a UTC-midnight Date, or null.
+function parseAnyDate(raw){
+  const s = cleanCell(raw);
+  if(!s || s.startsWith('#')) return null;
+  if(/^-?\d+(\.\d+)?$/.test(s)){
+    const n = Number(s);
+    if(n <= 0) return null;
+    return serialToDate(s);
+  }
+  const parts = parseDateParts(s);
+  if(parts){
+    const year = parts.year || String(new Date().getFullYear()).slice(2);
+    return new Date(Date.UTC(2000 + parseInt(year, 10), parseInt(parts.month, 10) - 1, parseInt(parts.day, 10)));
+  }
+  return null;
+}
+
+// Monday–Sunday range (UTC ms) for the current calendar week, based on local "today".
+function getThisWeekRange(){
+  const now = new Date();
+  const dow = now.getDay();
+  const diffToMonday = (dow === 0) ? -6 : 1 - dow;
+  const start = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
+  const end = start + 7 * 86400000 - 1;
+  return {start, end};
+}
+
+function isInThisWeek(dateObj, range){
+  if(!dateObj) return false;
+  const t = dateObj.getTime();
+  return t >= range.start && t <= range.end;
+}
+
+// Sums Container Count for all valid rows whose Container Require delivery date
+// falls within the current Monday–Sunday week, regardless of any active table filters.
+function computeContainersThisWeek(){
+  const range = getThisWeekRange();
+  let total = 0;
+  RAW_ROWS.forEach(r => {
+    const d = parseAnyDate(r.deliveryDate);
+    if(isInThisWeek(d, range)) total += r.containerCount;
+  });
+  return total;
+}
+
 // Formats any date cell (serial number or text) to Indonesian DD/MM/YY.
 // Borrows the year from a fallback cell (e.g. the row's Delivery Date) when needed.
 function formatIndoDate(raw, fallbackRaw){
@@ -427,6 +472,7 @@ async function loadData(){
       .map(r => ({
         po: cleanCell(r[COL.po]),
         customer: cleanCell(r[COL.customer]),
+        containerCount: (() => { const v = parseFloat(cleanCell(r[COL.containerCount]).replace(',', '.')); return isNaN(v) ? 0 : v; })(),
         item: cleanCell(r[COL.item]),
         product: cleanCell(r[COL.product]),
         pallets: parsePallets(r[COL.pallets]),
@@ -449,6 +495,7 @@ async function loadData(){
       }));
 
     populateFilterOptions();
+    document.getElementById('kpiContainersWeek').textContent = computeContainersThisWeek().toLocaleString();
     applyFilters();
     document.getElementById('lastUpdated').textContent =
       'Live · updated ' + new Date().toLocaleString('en-GB', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'});
@@ -555,7 +602,6 @@ function renderKpis(rows){
   const missing = total - booked;
   const notReady = rows.filter(r => !isProductReady(r.statusOrder)).length;
 
-  document.getElementById('kpiTotal').textContent = total.toLocaleString();
   document.getElementById('kpiBooked').textContent = booked.toLocaleString();
   document.getElementById('kpiMissing').textContent = missing.toLocaleString();
   document.getElementById('kpiNotReady').textContent = notReady.toLocaleString();
