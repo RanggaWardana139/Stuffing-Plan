@@ -328,7 +328,17 @@ function parsePallets(v){
   return isNaN(n) ? 0 : n;
 }
 
-// Parses dates like "31-Agu" (no year) or "27-Aug-2026" into {day, month, year|null}
+// Converts a Google Sheets/Excel date serial number to a UTC JS Date.
+// Sheets epoch is Dec 30 1899; the 25569-day offset aligns it to the Unix epoch.
+function serialToDate(serial){
+  const n = Number(serial);
+  if(!isFinite(n) || n <= 0) return null;
+  const utcDays = Math.floor(n - 25569);
+  const d = new Date(utcDays * 86400 * 1000);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Parses text dates like "31-Agu" (no year) or "27-Aug-2026" into {day, month, year|null}
 function parseDateParts(raw){
   const s = cleanCell(raw);
   if(!s || s.startsWith('#') || s.startsWith('-')) return null;
@@ -344,18 +354,41 @@ function parseDateParts(raw){
   return {day, month, year};
 }
 
-// Formats a date string to Indonesian DD/MM/YY, borrowing the year from a fallback
-// date string (e.g. the row's Delivery Date) when the source has no year of its own.
-function formatIndoDate(raw, fallbackRaw){
-  const parts = parseDateParts(raw);
-  if(!parts) return cleanCell(raw) || '—';
-  let year = parts.year;
-  if(!year && fallbackRaw){
-    const fb = parseDateParts(fallbackRaw);
-    if(fb && fb.year) year = fb.year;
+function yearFromAnySource(raw){
+  const s = cleanCell(raw);
+  if(/^\d+(\.\d+)?$/.test(s)){
+    const d = serialToDate(s);
+    if(d) return String(d.getUTCFullYear()).slice(2);
   }
-  if(!year) year = String(new Date().getFullYear()).slice(2);
-  return `${parts.day}/${parts.month}/${year}`;
+  const parts = parseDateParts(s);
+  if(parts && parts.year) return parts.year;
+  return null;
+}
+
+// Formats any date cell (serial number or text) to Indonesian DD/MM/YY.
+// Borrows the year from a fallback cell (e.g. the row's Delivery Date) when needed.
+function formatIndoDate(raw, fallbackRaw){
+  const s = cleanCell(raw);
+  if(!s || s.startsWith('#')) return '—';
+
+  if(/^-?\d+(\.\d+)?$/.test(s)){
+    const n = Number(s);
+    if(n <= 0) return '—';
+    const d = serialToDate(s);
+    if(!d) return '—';
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const year = String(d.getUTCFullYear()).slice(2);
+    return `${day}/${month}/${year}`;
+  }
+
+  const parts = parseDateParts(s);
+  if(parts){
+    const year = parts.year || yearFromAnySource(fallbackRaw) || String(new Date().getFullYear()).slice(2);
+    return `${parts.day}/${parts.month}/${year}`;
+  }
+
+  return s;
 }
 
 function statusBadgeClass(status){
