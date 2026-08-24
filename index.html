@@ -200,7 +200,7 @@
   <div class="err-state" id="errState"></div>
 
   <div class="kpi-row" id="kpiRow">
-    <div class="kpi total"><div class="lbl">Containers This Week</div><div class="val" id="kpiContainersWeek">—</div><div class="foot">Container Count summed by Container Require delivery date, Mon–Sun</div></div>
+    <div class="kpi total"><div class="lbl">Containers This Week</div><div class="val" id="kpiContainersWeek">—</div><div class="foot" id="kpiContainersFoot">Container Count summed for the selected Expected Week</div></div>
     <div class="kpi booked"><div class="lbl">Booked</div><div class="val" id="kpiBooked">—</div><div class="foot" id="kpiBookedPct">BC number assigned</div></div>
     <div class="kpi missing"><div class="lbl">Missing booking</div><div class="val" id="kpiMissing">—</div><div class="foot" id="kpiMissingPct">no BC number yet</div></div>
     <div class="kpi notready"><div class="lbl">Product not ready</div><div class="val" id="kpiNotReady">—</div><div class="foot" id="kpiNotReadyPct">status order ≠ Finish Pack</div></div>
@@ -236,7 +236,7 @@
       </div>
     </div>
     <div class="spacer"></div>
-    <div class="week-note">Week codes match the sheet's internal "Expected Week" numbering — pick the code you want to review.</div>
+    <div class="week-note">Week codes match the sheet's internal "Expected Week" numbering. The KPI cards above total whichever week you pick here.</div>
     <button class="reset-btn" onclick="resetFilters()">Reset filters</button>
   </div>
 
@@ -383,36 +383,36 @@ function parseAnyDate(raw){
   return null;
 }
 
-// Monday–Sunday range (UTC ms) for the current calendar week, based on local "today".
-function getThisWeekRange(){
-  const now = new Date();
-  const dow = now.getDay();
-  const diffToMonday = (dow === 0) ? -6 : 1 - dow;
-  const start = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
-  const end = start + 7 * 86400000 - 1;
-  return {start, end};
-}
-
-function isInThisWeek(dateObj, range){
-  if(!dateObj) return false;
-  const t = dateObj.getTime();
-  return t >= range.start && t <= range.end;
-}
-
-// Summarises all four top KPIs from the Container Require delivery date column,
-// restricted to the current Monday–Sunday week — independent of any table filters,
-// so Booked/Missing/Product Not Ready always break down the same "this week" total.
-function computeWeekSummary(){
-  const range = getThisWeekRange();
+// Summarises all four top KPIs using Container Count, scoped to whichever
+// Expected Week is currently selected in the filter (the sheet's planning week,
+// not the actual delivery date). Only each container's leading line carries a
+// non-zero Container Count, so mixed-week sibling SKU lines in the same physical
+// container never get double-counted — the container is attributed to its
+// leading line's Expected Week.
+function computeWeekKpis(){
+  const weekVal = document.getElementById('weekSelect').value;
   let total = 0, booked = 0, missing = 0, notReady = 0;
   RAW_ROWS.forEach(r => {
-    const d = parseAnyDate(r.deliveryDate);
-    if(!isInThisWeek(d, range)) return;
+    if(weekVal !== 'all' && r.expectedWeek !== weekVal) return;
     total += r.containerCount;
     if(r.booked) booked += r.containerCount; else missing += r.containerCount;
     if(!isProductReady(r.statusOrder)) notReady += r.containerCount;
   });
   return {total, booked, missing, notReady};
+}
+
+function renderWeekKpis(){
+  const summary = computeWeekKpis();
+  const weekVal = document.getElementById('weekSelect').value;
+  const weekLabel = weekVal === 'all' ? 'all weeks' : `Week ${weekVal}`;
+  document.getElementById('kpiContainersWeek').textContent = summary.total.toLocaleString();
+  document.getElementById('kpiBooked').textContent = summary.booked.toLocaleString();
+  document.getElementById('kpiMissing').textContent = summary.missing.toLocaleString();
+  document.getElementById('kpiNotReady').textContent = summary.notReady.toLocaleString();
+  document.getElementById('kpiContainersFoot').textContent = `Container Count summed for ${weekLabel} (Expected Week)`;
+  document.getElementById('kpiBookedPct').textContent = summary.total ? Math.round(summary.booked/summary.total*100)+`% of ${weekLabel}'s containers` : 'BC number assigned';
+  document.getElementById('kpiMissingPct').textContent = summary.total ? Math.round(summary.missing/summary.total*100)+`% of ${weekLabel}'s containers` : 'no BC number yet';
+  document.getElementById('kpiNotReadyPct').textContent = summary.total ? Math.round(summary.notReady/summary.total*100)+`% of ${weekLabel}'s containers — Status Order ≠ Finish Pack` : 'status order ≠ Finish Pack';
 }
 
 // Formats any date cell (serial number or text) to Indonesian DD/MM/YY.
@@ -500,14 +500,6 @@ async function loadData(){
       }));
 
     populateFilterOptions();
-    const summary = computeWeekSummary();
-    document.getElementById('kpiContainersWeek').textContent = summary.total.toLocaleString();
-    document.getElementById('kpiBooked').textContent = summary.booked.toLocaleString();
-    document.getElementById('kpiMissing').textContent = summary.missing.toLocaleString();
-    document.getElementById('kpiNotReady').textContent = summary.notReady.toLocaleString();
-    document.getElementById('kpiBookedPct').textContent = summary.total ? Math.round(summary.booked/summary.total*100)+"% of this week's containers" : 'BC number assigned';
-    document.getElementById('kpiMissingPct').textContent = summary.total ? Math.round(summary.missing/summary.total*100)+"% of this week's containers" : 'no BC number yet';
-    document.getElementById('kpiNotReadyPct').textContent = summary.total ? Math.round(summary.notReady/summary.total*100)+"% of this week's containers — Status Order ≠ Finish Pack" : 'status order ≠ Finish Pack';
     applyFilters();
     document.getElementById('lastUpdated').textContent =
       'Live · updated ' + new Date().toLocaleString('en-GB', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'});
@@ -584,6 +576,7 @@ function applyFilters(){
   });
 
   rows = sortRows(rows);
+  renderWeekKpis();
   renderTable(rows);
 }
 
